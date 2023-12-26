@@ -1,0 +1,4 @@
+h11==0.14.0
+pyp0f==0.3.0
+scapy==2.5.0
+typing-extensions==4.9.0
