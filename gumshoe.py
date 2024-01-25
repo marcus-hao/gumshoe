@@ -63,7 +63,7 @@ def xmas_scan(ip, port):
 def null_scan(ip, port):
     # Don't set any flags in the TCP header
     null_packet = IP(dst=ip) / TCP(sport=RandShort(), dport=port, flags="")
-    response = sr1(xmas_packet, timeout=1, verbose=0)
+    response = sr1(null_packet, timeout=1, verbose=0)
     if response:
         if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x04:
             return False
