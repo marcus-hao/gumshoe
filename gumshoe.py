@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+import socket
 import argparse
 from datetime import datetime
 from scapy.all import *
 import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
-import socket
+
 
 def syn_scan(ip, port):
     # Set SYN flag in TCP header
@@ -18,10 +19,11 @@ def syn_scan(ip, port):
             return False
     return False
 
+
 def udp_scan(ip, port):
     # Create the UDP packet with destination port
     udp_packet = IP(dst=ip) / UDP(dport=port)
-    
+
     # Send the packet and wait for a response
     response = sr1(udp_packet, timeout=1, verbose=0)
 
@@ -32,6 +34,7 @@ def udp_scan(ip, port):
         else:
             return False
     return False
+
 
 def fin_scan(ip, port):
     # Set FIN flag in TCP header
@@ -44,6 +47,7 @@ def fin_scan(ip, port):
             return True
     return True
 
+
 def xmas_scan(ip, port):
     # Set PUSH, URG, FIN flags in TCP header
     xmas_packet = IP(dst=ip) / TCP(sport=RandShort(), dport=port, flags="PFU")
@@ -55,6 +59,7 @@ def xmas_scan(ip, port):
             return True
     return True
 
+
 def null_scan(ip, port):
     # Don't set any flags in the TCP header
     null_packet = IP(dst=ip) / TCP(sport=RandShort(), dport=port, flags="")
@@ -65,6 +70,7 @@ def null_scan(ip, port):
         else:
             return True
     return True
+
 
 def ping_sweep(ip):
     # Create the ICMP echo request with target network
@@ -81,6 +87,42 @@ def ping_sweep(ip):
 
     return results
 
+
+def os_fingerprint(ip, port):
+    # We implement passive OS fingerprinting
+
+    # Craft a TCP/IP packet with the SYN flag set
+    packet = IP(dst=ip) / TCP(dport=port, flags="S")
+
+    # Send the packet, then parse the response
+    response = sr1(packet, timeout=1, verbose=0)
+
+    if response:
+        # Extract TTL and window size
+        ttl = response[IP].ttl
+        window_size = response[TCP].window
+
+        # Guess the OS based on TTL and TCP window size
+        if ttl <= 64 and window_size == 5840:
+            return "Linux (kernel 2.4 and 2.6)"
+        elif ttl <= 64 and window_size == 64240:
+            return "Linux"
+        elif ttl <= 64 and window_size == 5720:
+            return "Google's customized Linux"
+        elif ttl <= 64 and window_size == 65535:
+            return "FreeBSD"
+        elif ttl <= 128 and window_size == 65535:
+            return "Windows XP or Windows 10"
+        elif ttl <= 128 and window_size == 8192:
+            return "Windows 7, Vista and Server 2008"
+        elif ttl <= 128 and window_size == 64240:
+            return "Windows 10"
+        elif ttl <= 128 and window_size == 4128:
+            return "Cisco Router (IOS 12.4)"
+
+    return ""
+
+
 def get_banner(ip, port):
     try:
         socket.setdefaulttimeout(2)
@@ -90,6 +132,7 @@ def get_banner(ip, port):
         return s.recv(1024)
     except:
         return None
+
 
 def parse_ports(ports):
     try:
@@ -110,6 +153,7 @@ def parse_ports(ports):
     except ValueError:
         raise argparse.ArgumentTypeError("Invalid port specification")
 
+
 def output_to_file(results, filepath):
     try:
         with open(filepath, "w") as f:
@@ -117,26 +161,36 @@ def output_to_file(results, filepath):
     except IOError as e:
         print(f"Error writing to file: {e}")
 
+
 # Parse arguments
 parser = argparse.ArgumentParser()
 # Scan options
-parser.add_argument("-sS", "--syn", action="store_true", help="Perform a SYN scan")
-parser.add_argument("-sV", "--version", action="store_true", help="Probe to determine service information")
-parser.add_argument("-sU", "--udp", action="store_true", help="Perform a UDP scan")
-parser.add_argument("-sF", "--fin", action="store_true", help="Perform a FIN scan")
-parser.add_argument("-sN", "--null", action="store_true", help="Perform a null scan")
-parser.add_argument("-sX", "--xmas", action="store_true", help="Perform an Xmas scan")
-parser.add_argument("-P", "--ping", action="store_true", help="Perform a ping sweep")
-parser.add_argument("-p", "--port", type=parse_ports, help="Specify port range or list to scan (e.g., 1-1023, 80, 443)")
+parser.add_argument("-sS", "--syn", action="store_true",
+                    help="Perform a SYN scan")
+parser.add_argument("-sV", "--version", action="store_true",
+                    help="Probe to determine service information")
+parser.add_argument("-sU", "--udp", action="store_true",
+                    help="Perform a UDP scan")
+parser.add_argument("-sF", "--fin", action="store_true",
+                    help="Perform a FIN scan")
+parser.add_argument("-sN", "--null", action="store_true",
+                    help="Perform a null scan")
+parser.add_argument("-sX", "--xmas", action="store_true",
+                    help="Perform an Xmas scan")
+parser.add_argument("-P", "--ping", action="store_true",
+                    help="Perform a ping sweep")
+parser.add_argument("-p", "--port", type=parse_ports,
+                    help="Specify port range or list to scan (e.g., 1-1023, 80, 443)")
 parser.add_argument("-o", "--output", help="Output the results to a text file")
-parser.add_argument("-os", "--os", action="store_true", help="Fingerprint the operating system")
+parser.add_argument("-os", "--os", action="store_true",
+                    help="Fingerprint the operating system")
 # Positional arguments
 parser.add_argument("ip_address", help="Target IP address")
 
 args = parser.parse_args()
 
 target_ip = args.ip_address
-target_ports = args.port if args.port else list(range(1,1024))
+target_ports = args.port if args.port else list(range(1, 1024))
 
 start_time = datetime.now()
 
@@ -158,7 +212,9 @@ logo = """
 
 """
 
-menu = logo + f"\nStarting Gumshoe v1.0 at {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n" + f"Gumshoe scan report for {target_ip}\n"
+menu = logo + \
+    f"\nStarting Gumshoe v1.0 at {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n" + \
+    f"Gumshoe scan report for {target_ip}\n"
 
 if not args.output:
     print(menu)
@@ -210,6 +266,10 @@ else:
                 output += f"Port {port}: OPEN\n"
             else:
                 continue
+
+if args.os:
+    os_version = os_fingerprint(target_ip, 22)
+    output += f"Detected OS: {os_version}\n"
 
 end_time = datetime.now()
 elapsed_time = end_time - start_time
