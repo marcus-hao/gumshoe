@@ -1,115 +1,95 @@
 #!/usr/bin/env python3
 import argparse
+from datetime import datetime
 from scapy.all import *
+import logging
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
+import socket
 
-results = ""    # Global variable to store results
+def syn_scan(ip, port):
+    # Set SYN flag in TCP header
+    syn_packet = IP(dst=ip) / TCP(sport=RandShort(), dport=port, flags="S")
+    response = sr1(syn_packet, timeout=1, verbose=0)
 
-def syn_scan(target_ip, target_ports):
-    for port in target_ports:
-        # Create the TCP SYN packet with destination port
-        syn_packet = IP(dst=target_ip) / TCP(sport=RandShort(), dport=port, flags="S")
-
-        # Send the packet and wait for a response
-        response = sr1(syn_packet, timeout=1, verbose=0)
-
-        # Check if a response was received
-        if response:
-            if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
-                print(f"Port {port} is open")
-            else:
-                print(f"Port {port} is closed")
+    if response:
+        if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
+            return True
         else:
-            print(f"Port {port} is filtered or unreachable")
+            return False
+    return False
 
-def udp_scan(target_ip, target_ports):
-    for port in target_ports:
-        # Create the UDP packet with destination port
-        udp_packet = IP(dst=target_ip) / UDP(dport=port)
-        
-        # Send the packet and wait for a response
-        response = sr1(udp_packet, timeout=1, verbose=0)
+def udp_scan(ip, port):
+    # Create the UDP packet with destination port
+    udp_packet = IP(dst=ip) / UDP(dport=port)
+    
+    # Send the packet and wait for a response
+    response = sr1(udp_packet, timeout=1, verbose=0)
 
-        # Check if a response was receieved
-        if response:
-            if response.haslayer(UDP):
-                print(f"Port {port} is open")
-            else:
-                print(f"Port {port} is filtered or unreachable")
+    # Check if a response was receieved
+    if response:
+        if response.haslayer(UDP):
+            return True
         else:
-            print(f"Port {port} is closed")
+            return False
+    return False
 
-def fin_scan(target_ip, target_ports):
-    for port in target_ports:
-        # Create the TCP FIN packet with destination port
-        fin_packet = IP(dst=target_ip) / TCP(sport=RandShort(), dport=port, flags="F")
-
-        # Send the packet and wait for a response
-        response = sr1(fin_packet, timeout=1, verbose=0)
-
-        # Check for response
-        if response:
-            if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x04:
-                print(f"Port {port} is closed")
-            else:
-                print(f"Port {port} is filtered/opened")
+def fin_scan(ip, port):
+    # Set FIN flag in TCP header
+    fin_packet = IP(dst=ip) / TCP(sport=RandShort(), dport=port, flags="F")
+    response = sr1(fin_packet, timeout=1, verbose=0)
+    if response:
+        if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x04:
+            return False
         else:
-            print(f"Port {port} is filtered/opened")        
+            return True
+    return True
 
-def xmas_scan(target_ip, target_ports):
-    for port in target_ports:
-        # Create the Xmas packet with destination port by setting PUSH, URG, FIN flags
-        xmas_packet = IP(dst=target_ip) / TCP(sport=RandShort(), dport=port, flags="PFU")
-
-        # Send the packet and wait for a response
-        response = sr1(xmas_packet, timeout=1, verbose=0)
-
-        # Check for response
-        if response:
-            if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x04:
-                print(f"Port {port} is closed")
-            else:
-                print(f"Port {port} is filtered/opened")
+def xmas_scan(ip, port):
+    # Set PUSH, URG, FIN flags in TCP header
+    xmas_packet = IP(dst=ip) / TCP(sport=RandShort(), dport=port, flags="PFU")
+    response = sr1(xmas_packet, timeout=1, verbose=0)
+    if response:
+        if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x04:
+            return False
         else:
-            print(f"Port {port} is filtered/opened")        
+            return True
+    return True
 
-def null_scan(target_ip, target_ports):
-    for port in target_ports:
-        # Create the TCP NULL packet with destination port by not setting any flags
-        null_packet = IP(dst=target_ip) / TCP(sport=RandShort(), dport=port, flags="")
-
-        # Send the packet and wait for a response
-        response = sr1(null_packet, timeout=1, verbose=0)
-
-        # Check for response
-        if response:
-            if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x04:
-                print(f"Port {port} is closed")
-            else:
-                print(f"Port {port} is filtered/opened")
+def null_scan(ip, port):
+    # Don't set any flags in the TCP header
+    null_packet = IP(dst=ip) / TCP(sport=RandShort(), dport=port, flags="")
+    response = sr1(xmas_packet, timeout=1, verbose=0)
+    if response:
+        if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x04:
+            return False
         else:
-            print(f"Port {port} is filtered/opened")        
+            return True
+    return True
 
-def ping_sweep(target_network):
+def ping_sweep(ip):
     # Create the ICMP echo request with target network
-    icmp_packet = IP(dst=target_network) / ICMP()
+    icmp_packet = IP(dst=ip) / ICMP()
 
     # Send the packet and receieve responses
     responses, _ = sr(icmp_packet, timeout=1, verbose=0)
 
+    results = ""
     for response in responses:
-        # Extract the host IP from the response
+        # Extract host ip from the respones
         host_ip = response[0][IP].src
-        print(f"Host {host_ip} is reachable")
+        results += f"Host {host_ip} is UP\n"
 
-def os_fingerprint():
-    return
+    return results
 
-def output_to_file(results, filepath):
+def get_banner(ip, port):
     try:
-        with open(filepath, "w") as file:
-            file.write(results)
-    except IOError as e:
-        print(f"Error writing to file: {e}")
+        socket.setdefaulttimeout(2)
+        s = socket.socket()
+        s.connect((ip, port))
+        s.send(b'GET / HTTP/1.1\r\nHost: ' + ip.encode("utf-8") + b'\r\n\r\n')
+        return s.recv(1024)
+    except:
+        return None
 
 def parse_ports(ports):
     try:
@@ -130,8 +110,39 @@ def parse_ports(ports):
     except ValueError:
         raise argparse.ArgumentTypeError("Invalid port specification")
 
-if __name__ == "__main__":
-    print("""
+def output_to_file(results, filepath):
+    try:
+        with open(filepath, "w") as f:
+            f.write(results)
+    except IOError as e:
+        print(f"Error writing to file: {e}")
+
+# Parse arguments
+parser = argparse.ArgumentParser()
+# Scan options
+parser.add_argument("-sS", "--syn", action="store_true", help="Perform a SYN scan")
+parser.add_argument("-sV", "--version", action="store_true", help="Probe to determine service information")
+parser.add_argument("-sU", "--udp", action="store_true", help="Perform a UDP scan")
+parser.add_argument("-sF", "--fin", action="store_true", help="Perform a FIN scan")
+parser.add_argument("-sN", "--null", action="store_true", help="Perform a null scan")
+parser.add_argument("-sX", "--xmas", action="store_true", help="Perform an Xmas scan")
+parser.add_argument("-P", "--ping", action="store_true", help="Perform a ping sweep")
+parser.add_argument("-p", "--port", type=parse_ports, help="Specify port range or list to scan (e.g., 1-1023, 80, 443)")
+parser.add_argument("-o", "--output", help="Output the results to a text file")
+parser.add_argument("-os", "--os", action="store_true", help="Fingerprint the operating system")
+# Positional arguments
+parser.add_argument("ip_address", help="Target IP address")
+
+args = parser.parse_args()
+
+target_ip = args.ip_address
+target_ports = args.port if args.port else list(range(1,1024))
+
+start_time = datetime.now()
+
+output = ""
+
+logo = """
          _        _                  _   _         _            _       _    _            _      
         /\ \     /\_\               /\_\/\_\ _    / /\         / /\    / /\ /\ \         /\ \    
        /  \ \   / / /         _    / / / / //\_\ / /  \       / / /   / / //  \ \       /  \ \   
@@ -145,47 +156,66 @@ if __name__ == "__main__":
 \/___________/ \/_________/          \/_/   \_____\/   \/_/    \/_/ \/_________/ \/__________/   
                                                                                                  
 
-""")
-    
-    # Parse arguments
-    parser = argparse.ArgumentParser()
-    # Scan options
-    parser.add_argument("-sS", "--syn", action="store_true", help="Perform a SYN scan")
-    parser.add_argument("-sV", "--version", action="store_true", help="Probe to determine service information")
-    parser.add_argument("-sU", "--udp", action="store_true", help="Perform a UDP scan")
-    parser.add_argument("-sF", "--fin", action="store_true", help="Perform a FIN scan")
-    parser.add_argument("-sN", "--null", action="store_true", help="Perform a null scan")
-    parser.add_argument("-sX", "--xmas", action="store_true", help="Perform an Xmas scan")
-    parser.add_argument("-P", "--ping", action="store_true", help="Perform a ping sweep")
-    parser.add_argument("-p", "--port", type=parse_ports, help="Specify port range or list to scan (e.g., 1-1023, 80, 443)")
-    parser.add_argument("-o", "--output", action="store_true", help="Output the results to a text file")
-    parser.add_argument("-os", "--os", action="store_true", help="Fingerprint the operating system")
-    # Positional arguments
-    parser.add_argument("ip_address", help="Target IP address")
+"""
 
-    args = parser.parse_args()
+menu = logo + f"\nStarting Gumshoe v1.0 at {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n" + f"Gumshoe scan report for {target_ip}\n"
 
-    target_ip = args.ip_address
-    target_ports = args.port
+if not args.output:
+    print(menu)
+else:
+    output += menu
 
-    if args.syn:
-        syn_scan(target_ip, target_ports)
-    elif args.version:
-        print("We'll do something about this later...")
-    elif args.udp:
-        udp_scan(target_ip, target_ports)
-    elif args.fin:
-        fin_scan(target_ip, target_ports)
-    elif args.null:
-        null_scan(target_ip, target_ports)
-    elif args.xmas:
-        xmas_scan(target_ip, target_ports)
-    elif args.ping:
-        ping_sweep(target_ip)
-    else:
-        print("No scan options selected?!")
+# Parse scanning options
+if args.ping:
+    output += ping_sweep(target_ip)
+else:
+    for port in target_ports:
+        if args.syn and args.version:
+            status = syn_scan(target_ip, port)
+            if status:
+                banner = get_banner(target_ip, port)
+                if banner:
+                    output += f"Port {port}: OPEN - {banner}\n"
+                else:
+                    continue
+            else:
+                continue
+        elif args.syn:
+            status = syn_scan(target_ip, port)
+            if status:
+                output += f"Port {port}: OPEN\n"
+            else:
+                continue
+        elif args.udp:
+            status = udp_scan(target_ip, port)
+            if status:
+                output += f"Port {port}: OPEN\n"
+            else:
+                continue
+        elif args.fin:
+            status = fin_scan(target_ip, port)
+            if status:
+                output += f"Port {port}: OPEN\n"
+            else:
+                continue
+        elif args.xmas:
+            status = xmas_scan(target_ip, port)
+            if status:
+                output += f"Port {port}: OPEN\n"
+            else:
+                continue
+        elif args.null:
+            status = null_scan(target_ip, port)
+            if status:
+                output += f"Port {port}: OPEN\n"
+            else:
+                continue
 
-    if args.output:
-        output_to_file(results, args.output)
+end_time = datetime.now()
+elapsed_time = end_time - start_time
+output += f"Gumshoe scan completed in {elapsed_time.total_seconds()} seconds.\n"
 
-    print("Scan completed")
+if args.output:
+    output_to_file(output, args.output)
+else:
+    print(output)
